@@ -172,6 +172,10 @@
       }
 
       @media (max-width: 768px) {
+        .container {
+          padding: 1rem 0.5rem;
+        }
+
         header {
           flex-direction: row;
           align-items: flex-start;
@@ -185,6 +189,15 @@
 
         .theme-toggle {
           margin-left: auto;
+        }
+
+        .chart-section {
+          padding: 1rem;
+          min-height: 400px;
+        }
+
+        #temperatureChart {
+          height: 400px;
         }
 
         .zoom-info {
@@ -331,7 +344,7 @@
           grid: {
             left: "3%",
             right: "4%",
-            bottom: "15%",
+            bottom: window.innerWidth <= 768 ? "20%" : "15%",
             top: 80,
             containLabel: true,
           },
@@ -364,11 +377,23 @@
                 .trim(),
               formatter: function (value) {
                 const date = new Date(value);
-                return date.toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
+                // Check if mobile screen
+                const isMobile = window.innerWidth <= 768;
+                if (isMobile) {
+                  // On mobile, show shorter format: HH:MM or just hour if crowded
+                  return date.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                } else {
+                  return date.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                }
               },
+              rotate: window.innerWidth <= 768 ? 45 : 0,
+              interval: window.innerWidth <= 768 ? 'auto' : 0,
             },
           },
           yAxis: {
@@ -444,6 +469,18 @@
 
         window.addEventListener("resize", () => {
           chart.resize();
+          // Update axis label rotation and grid on resize
+          chart.setOption({
+            grid: {
+              bottom: window.innerWidth <= 768 ? "20%" : "15%",
+            },
+            xAxis: {
+              axisLabel: {
+                rotate: window.innerWidth <= 768 ? 45 : 0,
+                interval: window.innerWidth <= 768 ? 'auto' : 0,
+              },
+            },
+          });
         });
 
         // Listen for dataZoom events to update timestamp display
