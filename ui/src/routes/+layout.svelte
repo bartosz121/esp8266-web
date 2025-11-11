@@ -1,16 +1,22 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
+
+	import { pwaInfo } from 'virtual:pwa-info';
+	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { SvelteQueryDevtools } from '@tanstack/svelte-query-devtools';
 
 	import favicon from '$lib/assets/favicon.svg';
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
-	import { pwaInfo } from 'virtual:pwa-info';
 	import { LocalStorage } from '$lib/storage.svelte';
 
 	let { children } = $props();
 
 	let webManifestLink = $derived(pwaInfo ? pwaInfo.webManifest.linkTag : '');
+
+	const queryClient = new QueryClient({ defaultOptions: { queries: { enabled: browser } } });
 
 	const themeStorage = new LocalStorage<'light' | 'dark'>('theme');
 
@@ -44,10 +50,15 @@
 	</script>
 </svelte:head>
 
-<div style="display:none">
-	{#each locales as locale}
-		<a href={localizeHref(page.url.pathname, { locale })}>{locale}</a>
-	{/each}
-</div>
+<QueryClientProvider client={queryClient}>
+	<main>
+		<div style="display:none">
+			{#each locales as locale}
+				<a href={localizeHref(page.url.pathname, { locale })}>{locale}</a>
+			{/each}
+		</div>
 
-{@render children()}
+		{@render children()}
+	</main>
+	<SvelteQueryDevtools />
+</QueryClientProvider>
