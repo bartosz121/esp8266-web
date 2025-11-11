@@ -37,6 +37,21 @@ type app struct {
 	secretKey string
 }
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Secret-Key")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	h := slogctx.NewHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}), nil)
 	logger := slog.New(h)
@@ -123,7 +138,7 @@ func main() {
 	mux.Handle("/health", panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.healthHandler)))))
 
 	mux.Handle("/", panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.homeHandler)))))
-	mux.Handle("/data", panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.dataHandler)))))
+	mux.Handle("/data", corsMiddleware(panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.dataHandler))))))
 
 	addr := fmt.Sprintf("%s:%d", *host, *port)
 	server := &http.Server{
