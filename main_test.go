@@ -129,7 +129,8 @@ func TestDataHandlerGET(t *testing.T) {
 	app := &app{db: db, secretKey: "dummy"}
 	require.NoError(t, app.applyMigrations(context.Background()))
 
-	_, err := db.Exec(context.Background(), "INSERT INTO readings (temp_co, temp_room, humidity, timestamp) VALUES ($1, $2, $3, $4)", 27.0, 24.0, 50.0, time.Now().UTC().Unix())
+	now := time.Now().UTC().Unix()
+	_, err := db.Exec(context.Background(), "INSERT INTO readings (temp_co, temp_room, humidity, timestamp) VALUES ($1, $2, $3, $4)", 27.0, 24.0, 50.0, now)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/data", nil)
@@ -212,4 +213,118 @@ func TestHomeHandler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "Temperature Monitor")
+}
+
+func TestDataHandlerGETWithTimestampFilter(t *testing.T) {
+	db := setupTestDB(t)
+	app := &app{db: db, secretKey: "dummy"}
+	require.NoError(t, app.applyMigrations(context.Background()))
+
+	// Insert test data with specific timestamps
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	readings := []struct {
+		tempCo    float64
+		tempRoom  float64
+		humidity  float64
+		timestamp int64
+	}{
+		{20.0, 18.0, 50.0, baseTime - 1000},
+		{21.0, 19.0, 55.0, baseTime},
+		{22.0, 20.0, 60.0, baseTime + 1000},
+		{23.0, 21.0, 65.0, baseTime + 2000},
+	}
+
+	for _, r := range readings {
+		_, err := db.Exec(context.Background(),
+			"INSERT INTO readings (temp_co, temp_room, humidity, timestamp) VALUES ($1, $2, $3, $4)",
+			r.tempCo, r.tempRoom, r.humidity, r.timestamp)
+		require.NoError(t, err)
+	}
+
+	tests := []struct {
+		name      string
+		queryURL  string
+		expectLen int
+	}{
+		{
+			name:      "no filters",
+			queryURL:  "/data",
+			expectLen: 4,
+		},
+		{
+			name:      "filter with from only",
+			queryURL:  fmt.Sprintf("/data?from=%d", baseTime),
+			expectLen: 3,
+		},
+		{
+			name:      "filter with to only",
+			queryURL:  fmt.Sprintf("/data?to=%d", baseTime+1000),
+			expectLen: 3,
+		},
+		{
+			name:      "filter with both from and to",
+			queryURL:  fmt.Sprintf("/data?from=%d&to=%d", baseTime, baseTime+1000),
+			expectLen: 2,
+		},
+		{
+			name:      "filter with from and to, narrow range",
+			queryURL:  fmt.Sprintf("/data?from=%d&to=%d", baseTime+1500, baseTime+1500),
+			expectLen: 0,
+		},
+		{
+			name:      "filter with invalid from",
+			queryURL:  "/data?from=invalid",
+			expectLen: 4,
+		},
+		{
+			name:      "filter with negative from",
+			queryURL:  "/data?from=-100",
+			expectLen: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tt.queryURL, nil)
+			w := httptest.NewRecorder()
+
+			app.dataHandler(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			var resp []TemperatureReading
+			err := json.NewDecoder(w.Body).Decode(&resp)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectLen, len(resp), "unexpected response length for query: %s", tt.queryURL)
+		})
+	}
+}
+
+func TestDataHandlerGETWithTimestampFilterAndPagination(t *testing.T) {
+	db := setupTestDB(t)
+	app := &app{db: db, secretKey: "dummy"}
+	require.NoError(t, app.applyMigrations(context.Background()))
+
+	// Insert test data with specific timestamps
+	baseTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	for i := 0; i < 10; i++ {
+		ts := baseTime + int64(i*1000)
+		_, err := db.Exec(context.Background(),
+			"INSERT INTO readings (temp_co, temp_room, humidity, timestamp) VALUES ($1, $2, $3, $4)",
+			20.0+float64(i), 18.0, 50.0, ts)
+		require.NoError(t, err)
+	}
+
+	// Test filter + limit + offset
+	req := httptest.NewRequest("GET", fmt.Sprintf("/data?from=%d&limit=3&offset=1", baseTime), nil)
+	w := httptest.NewRecorder()
+
+	app.dataHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []TemperatureReading
+	err := json.NewDecoder(w.Body).Decode(&resp)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(resp))
 }

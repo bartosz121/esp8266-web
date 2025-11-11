@@ -209,7 +209,7 @@ func (a *app) dataHandler(w http.ResponseWriter, r *http.Request) {
 		limitStr := r.URL.Query().Get("limit")
 		limit := 10
 		if limitStr != "" {
-			if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
 				limit = l
 			}
 		}
@@ -222,12 +222,44 @@ func (a *app) dataHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		rows, err := a.db.Query(r.Context(), `
+		var from *int64
+		fromStr := r.URL.Query().Get("from")
+		if fromStr != "" {
+			if f, err := strconv.ParseInt(fromStr, 10, 64); err == nil && f >= 0 {
+				from = &f
+			}
+		}
+
+		var to *int64
+		toString := r.URL.Query().Get("to")
+		if toString != "" {
+			if t, err := strconv.ParseInt(toString, 10, 64); err == nil && t >= 0 {
+				to = &t
+			}
+		}
+
+		query := `
 			SELECT id, temp_co, temp_room, humidity, timestamp
 			FROM readings
-			ORDER BY timestamp DESC
-			LIMIT $1 OFFSET $2
-		`, limit, offset)
+			WHERE 1=1`
+		args := []interface{}{}
+		argIndex := 1
+
+		if from != nil {
+			query += fmt.Sprintf(" AND timestamp >= $%d", argIndex)
+			args = append(args, *from)
+			argIndex++
+		}
+		if to != nil {
+			query += fmt.Sprintf(" AND timestamp <= $%d", argIndex)
+			args = append(args, *to)
+			argIndex++
+		}
+
+		query += fmt.Sprintf(` ORDER BY timestamp DESC LIMIT $%d OFFSET $%d`, argIndex, argIndex+1)
+		args = append(args, limit, offset)
+
+		rows, err := a.db.Query(r.Context(), query, args...)
 		if err != nil {
 			logger.Error("Failed to query temperature readings", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
