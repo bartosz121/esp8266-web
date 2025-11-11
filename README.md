@@ -19,16 +19,24 @@ go build -o esp8266-web .
 ## Development
 
 ```bash
-git clone https://github.com/bartosz121/esp8266-temp-web
-cd esp8266-temp-web
+git clone https://github.com/bartosz121/esp8266-web
+cd esp8266-web
 go mod download
+cd ui
+npm run build
 ```
 
 ```bash
 ./run-dev-db.sh
-go run . --db-user esp8266_user --db-pass esp8266_pass --db-name esp8266_db
+APP_SECRET_KEY=secret go run . --db-user esp8266_user --db-pass esp8266_pass --db-name esp8266_db
 ```
 
 ```bash
 APP_DB_USER=esp8266_user APP_DB_PASS=esp8266_pass APP_DB_PORT=5432 go test -v
+```
+
+```bash
+# ui development
+cd ui
+npm run dev -- --open
 ```
