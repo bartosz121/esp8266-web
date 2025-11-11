@@ -1,1 +1,9 @@
 esp8266-web
+static
+ui/node_modules
+ui/.env
+ui/.env.local
+ui/vite.config.js.timestamp-*
+ui/vite.config.ts.timestamp-*
+ui/.svelte-kit
+ui/build
