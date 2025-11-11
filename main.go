@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +19,23 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	slogctx "github.com/veqryn/slog-context"
 )
+
+//go:embed static/*
+var static embed.FS
+
+//go:embed static/index.html
+var index embed.FS
+
+var indexFile []byte
+
+func init() {
+	var e error
+	indexFile, e = index.ReadFile("static/index.html")
+	if e != nil {
+		slog.Default().Error("Init error reading index.html file", "err", e.Error())
+		os.Exit(1)
+	}
+}
 
 type TemperatureReadingPayload struct {
 	TempCo    float64 `json:"tempCo"`
@@ -166,12 +186,24 @@ func (a *app) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) homeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	fsys, err := fs.Sub(static, "static")
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, `{"status": "ok"}`)
+
+	handler := http.FileServer(http.FS(fsys))
+
+	// Trim leading slash to map the URL path to embedded FS paths
+	reqPath := strings.TrimPrefix(r.URL.Path, "/")
+
+	if f, err := fs.Stat(fsys, reqPath); err == nil && !f.IsDir() {
+		handler.ServeHTTP(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(indexFile)
 }
 
 func (a *app) dataHandler(w http.ResponseWriter, r *http.Request) {
