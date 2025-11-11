@@ -65,12 +65,12 @@
 					{
 						type: 'value',
 						name: (window.innerWidth <= 768 ? m.temp_abbr() : m.temperature()) + ` (°C)`,
-						position: 'left'
+						position: 'right'
 					},
 					{
 						type: 'value',
 						name: `${m.humidity()} (%)`,
-						position: 'right',
+						position: 'left',
 						offset: 0
 					}
 				],
