@@ -170,13 +170,8 @@ func (a *app) homeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := os.ReadFile("index.html")
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write(data)
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, `{"status": "ok"}`)
 }
 
 func (a *app) dataHandler(w http.ResponseWriter, r *http.Request) {
