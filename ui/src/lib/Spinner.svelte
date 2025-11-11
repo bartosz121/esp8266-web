@@ -1,3 +1,7 @@
+<script lang="ts">
+	import { m } from '$lib/paraglide/messages.js';
+</script>
+
 <div role="status">
 	<svg
 		aria-hidden="true"
@@ -15,5 +19,5 @@
 			fill="currentFill"
 		/>
 	</svg>
-	<span class="sr-only">Loading...</span>
+	<span class="sr-only">{m.loading()}</span>
 </div>

@@ -4,6 +4,7 @@
 	import type { GetReadingsQueryParams } from '$lib/api';
 	import { getReadings } from '$lib/api';
 	import { LocalStorage } from '$lib/storage.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	import Chart from '$lib/Chart.svelte';
 	import Spinner from '$lib/Spinner.svelte';
@@ -56,7 +57,7 @@
 
 	let pageTitle = $derived.by(() => {
 		if (!readingsQuery.data) {
-			return 'Temperature Monitor';
+			return m.temperature_monitor();
 		}
 
 		return `CO: ${readingsQuery.data?.[0]?.tempCo}°C | Room: ${readingsQuery.data?.[0]?.tempRoom}°C | ${latestDataTimestampPretty}`;
@@ -80,28 +81,28 @@
 			<div class="w-full">
 				<div class="flex flex-col gap-6 text-sm text-gray-600 md:flex-row dark:text-gray-400">
 					<div class="flex flex-col">
-						<span class="text-xs tracking-wider uppercase">CO Temp</span>
+						<span class="text-xs tracking-wider uppercase">{m.co_temp()}</span>
 						<span
 							class="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-100"
 							id="currentTempCo">{readingsQuery.data?.[0]?.tempCo ?? '--'}°C</span
 						>
 					</div>
 					<div class="flex flex-col">
-						<span class="text-xs tracking-wider uppercase">Room Temp</span>
+						<span class="text-xs tracking-wider uppercase">{m.room_temp()}</span>
 						<span
 							class="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-100"
 							id="currentTempRoom">{readingsQuery.data?.[0]?.tempRoom ?? '--'}°C</span
 						>
 					</div>
 					<div class="flex flex-col">
-						<span class="text-xs tracking-wider uppercase">Humidity</span>
+						<span class="text-xs tracking-wider uppercase">{m.humidity()}</span>
 						<span
 							class="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-100"
 							id="currentHumidity">{readingsQuery.data?.[0]?.humidity ?? '--'}%</span
 						>
 					</div>
 					<div class="flex flex-col">
-						<span class="text-xs tracking-wider uppercase">Last Update</span>
+						<span class="text-xs tracking-wider uppercase">{m.last_update()}</span>
 						<span
 							class="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-100"
 							id="lastUpdate">{latestDataTimestampPretty}</span
@@ -126,7 +127,7 @@
 				</div>
 			{:else if readingsQuery.status === 'error'}
 				<div class="flex h-full items-center justify-center">
-					<span class="text-2xl">Failed to load data</span>
+					<span class="text-2xl">{m.failed_to_load_data()}</span>
 				</div>
 			{:else}
 				<Chart readings={readingsQuery.data} theme={themeStorage.current ?? 'light'} />

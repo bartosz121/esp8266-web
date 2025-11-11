@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as echarts from 'echarts';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { Reading } from './types';
 	import type { Attachment } from 'svelte/attachments';
 
@@ -45,7 +46,7 @@
 				},
 				legend: {
 					top: 0,
-					data: ['CO Temp', 'Room Temp', 'Humidity']
+					data: [m.co_temp(), m.room_temp(), m.humidity()]
 				},
 				grid: {
 					left: '3%',
@@ -63,12 +64,12 @@
 				yAxis: [
 					{
 						type: 'value',
-						name: (window.innerWidth <= 768 ? 'Temp.' : 'Temperature') + ' (°C)',
+						name: (window.innerWidth <= 768 ? m.temp_abbr() : m.temperature()) + ` (°C)`,
 						position: 'left'
 					},
 					{
 						type: 'value',
-						name: 'Humidity (%)',
+						name: `${m.humidity()} (%)`,
 						position: 'right',
 						offset: 0
 					}
@@ -86,19 +87,19 @@
 				],
 				series: [
 					{
-						name: 'CO Temp',
+						name: m.co_temp(),
 						type: 'line',
 						yAxisIndex: 0,
 						data: []
 					},
 					{
-						name: 'Room Temp',
+						name: m.room_temp(),
 						type: 'line',
 						yAxisIndex: 0,
 						data: []
 					},
 					{
-						name: 'Humidity',
+						name: m.humidity(),
 						type: 'line',
 						yAxisIndex: 1,
 						data: []
