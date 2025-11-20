@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -14,11 +15,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	slogctx "github.com/veqryn/slog-context"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var AppName = "esp8266-web-api"
+var AppVersion = "dev"
 
 //go:embed static/*
 var static embed.FS
@@ -61,7 +70,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Secret-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Secret-Key, traceparent, tracestate, baggage")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -79,6 +88,7 @@ func main() {
 
 	host := flag.String("host", "127.0.0.1", "Server host")
 	port := flag.Int("port", 8080, "Server port")
+	otelUrl := flag.String("otel-url", "", "Otel url")
 	dbHost := flag.String("db-host", "localhost", "Database host")
 	dbPort := flag.Int("db-port", 5432, "Database port")
 	dbUser := flag.String("db-user", "user", "Database user")
@@ -96,6 +106,10 @@ func main() {
 			*port = p
 			logger.Debug("flag port overridden by env APP_PORT", "value", p)
 		}
+	}
+	if env := os.Getenv("APP_OTEL_URL"); env != "" {
+		*otelUrl = env
+		logger.Debug("flag otel-url overridden by env APP_OTEL_URL", "value", env)
 	}
 	if env := os.Getenv("APP_DB_HOST"); env != "" {
 		*dbHost = env
@@ -126,15 +140,40 @@ func main() {
 		os.Exit(1)
 	}
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?application_name=esp8266-web",
-		*dbUser, *dbPass, *dbHost, *dbPort, *dbName)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?application_name=%s",
+		*dbUser, *dbPass, *dbHost, *dbPort, *dbName, AppName)
 	ctx := context.Background()
-	config, err := pgxpool.ParseConfig(connStr)
+	pgxConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		logger.Error("Failed to parse database config", "error", err)
 		os.Exit(1)
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+
+	// Setup otel
+	otelConn, err := initOtelConn(*otelUrl)
+	if err != nil {
+		logger.Error("failed to initialize otel connection (continuing without otel): %w", "error", err)
+	} else {
+		res, err := resource.New(ctx, resource.WithAttributes(semconv.ServiceNameKey.String(AppName), semconv.ServiceVersionKey.String(AppVersion)))
+		if err != nil {
+			logger.Error("failed to setup otel resource: %w", "error", err)
+			os.Exit(1)
+		}
+
+		otelShutdown, err := setupOtel(context.Background(), res, otelConn)
+		if err != nil {
+			logger.Error("Failed to setup otel", "error", err)
+			os.Exit(1)
+		}
+		defer func() {
+			err = errors.Join(err, otelShutdown(context.Background()))
+		}()
+
+		// pgx tracer
+		pgxConfig.ConnConfig.Tracer = otelpgx.NewTracer()
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
 	if err != nil {
 		logger.Error("Failed to create database pool", "error", err)
 		os.Exit(1)
@@ -154,16 +193,19 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/health", panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.healthHandler)))))
 
 	mux.Handle("/", panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.homeHandler)))))
 	mux.Handle("/data", corsMiddleware(panicRecoveryMiddleware(logger)(requestIdMiddleware(logger)(loggingMiddleware(http.HandlerFunc(app.dataHandler))))))
 
+	otelMux := otelhttp.NewHandler(mux, AppName)
+
 	addr := fmt.Sprintf("%s:%d", *host, *port)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      otelMux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -372,9 +414,22 @@ func requestIdMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := slogctx.NewCtx(r.Context(), logger)
 
+			// create request id
 			requestID := uuid.New().String()
 			w.Header().Set("X-Request-ID", requestID)
 			ctx = slogctx.With(ctx, slog.String("request_id", requestID))
+
+			// try to get trace id and span id
+			span := trace.SpanFromContext(ctx)
+			spanCtx := span.SpanContext()
+			if spanCtx.IsValid() {
+				if spanCtx.HasTraceID() {
+					ctx = slogctx.With(ctx, slog.String("TraceID", spanCtx.TraceID().String()))
+				}
+				if spanCtx.HasSpanID() {
+					ctx = slogctx.With(ctx, slog.String("SpanID", spanCtx.SpanID().String()))
+				}
+			}
 
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
@@ -410,6 +465,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			slog.String("url", r.URL.Path),
 			slog.String("remote", r.RemoteAddr),
 			slog.String("user_agent", r.UserAgent()),
+			slog.Any("headers", r.Header),
 		)
 
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
