@@ -1,5 +1,6 @@
 ## Env variables
 
+- `APP_OTEL_URL`
 - `APP_SECRET_KEY`
 - `APP_HOST`
 - `APP_PORT`
