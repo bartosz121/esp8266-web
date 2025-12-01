@@ -1,9 +1,13 @@
 FROM node:20-alpine AS ui-builder
 
+RUN apk --no-cache add git
+
 WORKDIR /app/ui
 
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci
+
+COPY .git /app/.git
 
 COPY ui .
 RUN npm run build
