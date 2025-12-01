@@ -16,8 +16,8 @@ export default defineConfig({
 			injectRegister: 'auto',
 			includeAssets: ['favicon.svg', 'icon.svg'],
 			manifest: {
-				name: 'Piec',
-				short_name: 'Piec',
+				name: 'ESP8266 Web',
+				short_name: 'ESP8266 Web',
 				background_color: '#ffffff',
 				theme_color: '#000000',
 				icons: [

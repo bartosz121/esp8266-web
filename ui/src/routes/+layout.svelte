@@ -23,6 +23,8 @@
 	// Does the same as <script> inside <svelte:head>; Acts as a fallback for that code
 	// js code in <script> prevents `flash` of light mode on page load if user prefers dark
 	onMount(() => {
+		import('$lib/instrumentation');
+
 		const prefersDarkColorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 		let storageTheme = themeStorage.current;
