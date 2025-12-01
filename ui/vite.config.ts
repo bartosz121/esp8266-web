@@ -3,9 +3,11 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
+import gitVersionPlugin from './vite-plugin-git-version';
 
 export default defineConfig({
 	plugins: [
+		gitVersionPlugin(),
 		tailwindcss(),
 		sveltekit(),
 		SvelteKitPWA({

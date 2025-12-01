@@ -18,7 +18,6 @@ export async function getReadings(params: GetReadingsQueryParams): Promise<Readi
 	if (params.offset !== undefined) searchParams.append('offset', params.offset.toString());
 
 	const url = `${baseUrl}/data${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
-	console.log({ url });
 
 	const response = await fetch(url, {
 		headers: {
