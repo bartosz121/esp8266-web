@@ -5,7 +5,7 @@
 	import { page } from '$app/state';
 
 	import { pwaInfo } from 'virtual:pwa-info';
-	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/svelte-query';
 	import { SvelteQueryDevtools } from '@tanstack/svelte-query-devtools';
 
 	import favicon from '$lib/assets/favicon.svg';
@@ -16,7 +16,17 @@
 
 	let webManifestLink = $derived(pwaInfo ? pwaInfo.webManifest.linkTag : '');
 
-	const queryClient = new QueryClient({ defaultOptions: { queries: { enabled: browser } } });
+	const queryCache = new QueryCache({
+		onError: async (error) => {
+			const { faro } = await import('$lib/instrumentation');
+			faro.api.pushError(error as Error);
+		}
+	});
+
+	const queryClient = new QueryClient({
+		queryCache,
+		defaultOptions: { queries: { enabled: browser } }
+	});
 
 	const themeStorage = new LocalStorage<'light' | 'dark'>('theme');
 
